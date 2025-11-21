@@ -85,3 +85,4 @@ api.add_resource(ContactForm, '/api/contact')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
+    PORT = int(os.environ.get('PORT', 5000))
