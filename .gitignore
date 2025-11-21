@@ -1,0 +1,5 @@
+# Server-side secrets
+.env
+__pycache__/
+*.pyc
+instance/contact.db
