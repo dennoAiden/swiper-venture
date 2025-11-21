@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Phone, Mail, MapPin, Clock, Send, MessageCircle } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Send } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -16,7 +18,7 @@ export default function Contact() {
     setLoading(true);
 
     try {
-      const res = await fetch('https://swiper-venture.onrender.com/api/contact', {
+      const res = await fetch(`${API_URL}/api/contacts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -25,11 +27,11 @@ export default function Contact() {
       const result = await res.json();
       setLoading(false);
 
-      if (result.success) {
+      if (res.ok && result.success) {
         alert('Thank you! Your message has been sent.');
         setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
       } else {
-        alert('Error: ' + result.message);
+        alert('Error: ' + (result.message || 'Failed to send message'));
       }
     } catch (err) {
       console.error(err);
@@ -51,7 +53,6 @@ export default function Contact() {
           </p>
         </div>
 
-        {/* Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* Contact Form */}
           <form
@@ -98,7 +99,6 @@ export default function Contact() {
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 transition-all resize-none"
               required
             />
-
             <button
               type="submit"
               disabled={loading}
