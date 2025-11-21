@@ -9,5 +9,6 @@ Flask-SQLAlchemy>=3.1.1
 gunicorn==23.0.0
 python-dotenv==1.0.1
 psycopg2-binary==2.9.9     
-SQLAlchemy==2.0.30
+SQLAlchemy==2.0.29
 requests==2.25.1            
+sqlalchemy-serializer==1.4.22
