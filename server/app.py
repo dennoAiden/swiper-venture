@@ -14,19 +14,19 @@ app = Flask(__name__)
 api = Api(app)
 CORS(app)
 
-# Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///contact.db'
+# Database configuration for production (PostgreSQL)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")  # PostgreSQL URL from Render
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
+# Email configuration
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")  # Your email to receive messages
+SYSTEM_SENDER = os.getenv("SYSTEM_SENDER")  # Verified SendGrid sender
 
-# This is **YOU** (The receiver)
-ADMIN_EMAIL = "kipkiruidennis25@gmail.com"
-
-# This must be verified in SendGrid
-SYSTEM_SENDER = "kipkiruidennis25@gmail.com"
-
+# Ensure required environment variables exist
+if not SENDGRID_API_KEY or not ADMIN_EMAIL or not SYSTEM_SENDER:
+    raise ValueError("Please set SENDGRID_API_KEY, ADMIN_EMAIL, and SYSTEM_SENDER in your environment variables.")
 
 class ContactForm(Resource):
     def post(self):
@@ -83,6 +83,7 @@ class ContactForm(Resource):
 
 api.add_resource(ContactForm, '/api/contact')
 
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
-    PORT = int(os.environ.get('PORT', 5000))
+    PORT = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', port=PORT, debug=False)
