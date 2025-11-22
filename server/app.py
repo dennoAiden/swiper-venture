@@ -34,55 +34,52 @@ if not SENDGRID_API_KEY or not ADMIN_EMAIL or not SYSTEM_SENDER:
 
 class ContactForm(Resource):
     def post(self):
-        data = request.get_json()
-        required_fields = ['name', 'email', 'phone', 'subject', 'message']
-
-        # Validation
-        if not all(field in data and data[field] for field in required_fields):
-            return {'success': False, 'message': 'All fields are required'}, 400
-
-        # Save message in database
-        submission = ContactSubmission(
-            name=data['name'],
-            email=data['email'],
-            phone=data['phone'],
-            subject=data['subject'],
-            message=data['message']
-        )
-        db.session.add(submission)
-        db.session.commit()
-
-        # Send email via SendGrid
         try:
-            message = Mail(
-                from_email=Email(SYSTEM_SENDER, f"{data['name']} via Swiper Venture"),
-                to_emails=ADMIN_EMAIL,
-                subject=f"New Contact Form Submission: {data['subject']}",
-                html_content=f"""
-                    <h2>New Contact Form Submission</h2>
-                    <p><strong>Name:</strong> {data['name']}</p>
-                    <p><strong>Email:</strong> {data['email']}</p>
-                    <p><strong>Phone:</strong> {data['phone']}</p>
-                    <p><strong>Subject:</strong> {data['subject']}</p>
-                    <p><strong>Message:</strong><br>{data['message']}</p>
-                """
+            data = request.get_json(force=True)  # ensures parsing even if content-type is missing
+            required_fields = ['name', 'email', 'phone', 'subject', 'message']
+
+            if not all(field in data and data[field] for field in required_fields):
+                return {'success': False, 'message': 'All fields are required'}, 400
+
+            # Save message in database
+            submission = ContactSubmission(
+                name=data['name'],
+                email=data['email'],
+                phone=data['phone'],
+                subject=data['subject'],
+                message=data['message']
             )
+            db.session.add(submission)
+            db.session.commit()
 
-            # User email becomes the reply-to address
-            message.reply_to = Email(data['email'], data['name'])
+            # Send email via SendGrid
+            try:
+                message = Mail(
+                    from_email=Email(SYSTEM_SENDER, f"{data['name']} via Swiper Venture"),
+                    to_emails=ADMIN_EMAIL,
+                    subject=f"New Contact Form Submission: {data['subject']}",
+                    html_content=f"""
+                        <h2>New Contact Form Submission</h2>
+                        <p><strong>Name:</strong> {data['name']}</p>
+                        <p><strong>Email:</strong> {data['email']}</p>
+                        <p><strong>Phone:</strong> {data['phone']}</p>
+                        <p><strong>Subject:</strong> {data['subject']}</p>
+                        <p><strong>Message:</strong><br>{data['message']}</p>
+                    """
+                )
+                message.reply_to = Email(data['email'], data['name'])
+                sg = SendGridAPIClient(SENDGRID_API_KEY)
+                sg.send(message)
+            except Exception as e:
+                print("SendGrid error:", str(e))
+                # optional: include in response
+                return {'success': True, 'message': 'Saved but email failed', 'error': str(e), 'id': submission.id}, 200
 
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            response = sg.send(message)
-            print("Email sent, SendGrid status code:", response.status_code)
+            return {'success': True, 'message': 'Message received successfully', 'id': submission.id}, 200
 
         except Exception as e:
-            print("SendGrid error:", str(e))
-
-        return {
-            'success': True,
-            'message': 'Message received successfully',
-            'id': submission.id
-        }, 200
+            # Any unexpected error
+            return {'success': False, 'message': str(e)}, 500
 
 
 api.add_resource(ContactForm, '/api/contact')
