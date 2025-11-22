@@ -6,6 +6,8 @@ import os
 from dotenv import load_dotenv
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email
+from flask_migrate import Migrate
+
 
 # Load environment variables
 load_dotenv()
@@ -13,6 +15,8 @@ load_dotenv()
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
+
+migrate = Migrate(app, db)
 
 # Database configuration for production (PostgreSQL)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")  # PostgreSQL URL from Render
