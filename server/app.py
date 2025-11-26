@@ -13,7 +13,21 @@ load_dotenv()
 
 app = Flask(__name__)
 api = Api(app)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# --------------------------
+# CORS CONFIG
+# --------------------------
+# Allow both local dev and deployed frontend
+CORS(
+    app,
+    resources={r"/api/*": {"origins": [
+        "http://localhost:5175",  # local dev
+        "https://swiper-ventures.onrender.com"  # deployed frontend
+    ]}},
+    supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "OPTIONS"]
+)
 
 # --------------------------
 # DATABASE CONFIGURATION
@@ -41,6 +55,10 @@ if not SENDGRID_API_KEY or not ADMIN_EMAIL or not SYSTEM_SENDER:
 # CONTACT FORM RESOURCE
 # --------------------------
 class ContactForm(Resource):
+    def options(self):
+        # Handle preflight OPTIONS requests
+        return {}, 200
+
     def post(self):
         try:
             data = request.get_json(force=True)
@@ -86,15 +104,12 @@ Message:
                     plain_text_content=email_body
                 )
 
-                # Reply-To is visitor's email
                 message.reply_to = Email(data['email'], data['name'])
-
                 sg = SendGridAPIClient(SENDGRID_API_KEY)
                 sg.send(message)
 
             except Exception as e:
                 print("SendGrid failed:", e)
-                # Email failed but database saved
                 return {
                     'success': True,
                     'message': 'Saved but email failed',
