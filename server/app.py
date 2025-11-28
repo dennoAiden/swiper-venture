@@ -1,102 +1,118 @@
-from flask import Flask, request
-from flask_restful import Resource, Api
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_mail import Mail, Message
-from models import db, ContactSubmission
-from flask_migrate import Migrate
-import os
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
 app = Flask(__name__)
-api = Api(app)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app)
 
-# --------------------------------
-# DATABASE
-# --------------------------------
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# ---------------------------------------
+# DATABASE CONFIG
+# ---------------------------------------
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-db.init_app(app)
+db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-# --------------------------------
-# SMTP MAIL CONFIG
-# --------------------------------
+# ---------------------------------------
+# MAIL CONFIG
+# ---------------------------------------
 app.config["MAIL_SERVER"] = os.getenv("MAIL_SERVER")
 app.config["MAIL_PORT"] = int(os.getenv("MAIL_PORT"))
 app.config["MAIL_USE_TLS"] = os.getenv("MAIL_USE_TLS") == "True"
 app.config["MAIL_USERNAME"] = os.getenv("MAIL_USERNAME")
 app.config["MAIL_PASSWORD"] = os.getenv("MAIL_PASSWORD")
-
-mail = Mail(app)
+app.config["MAIL_DEFAULT_SENDER"] = os.getenv("MAIL_USERNAME")
 
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
+mail = Mail(app)
 
-# --------------------------------
-# CONTACT FORM ENDPOINT
-# --------------------------------
-class ContactForm(Resource):
-    def options(self):
-        return {"status": "ok"}, 200
 
-    def post(self):
-        try:
-            data = request.get_json(force=True)
+# ---------------------------------------
+# CONTACT SUBMISSION MODEL
+# ---------------------------------------
+class ContactSubmission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120))
+    email = db.Column(db.String(120))
+    phone = db.Column(db.String(50))
+    subject = db.Column(db.String(200))
+    message = db.Column(db.Text)
 
-            required = ['name', 'email', 'phone', 'subject', 'message']
-            if not all(k in data and data[k] for k in required):
-                return {"success": False, "message": "All fields required"}, 400
 
-            # Save submission
-            entry = ContactSubmission(
-                name=data["name"],
-                email=data["email"],
-                phone=data["phone"],
-                subject=data["subject"],
-                message=data["message"]
-            )
-            db.session.add(entry)
-            db.session.commit()
+# ---------------------------------------
+# ROUTES
+# ---------------------------------------
 
-            # --------------------------------
-            # SEND SMTP EMAIL
-            # --------------------------------
-            email_body = f"""
+@app.route("/")
+def home():
+    return jsonify({"status": "Backend is running"}), 200
+
+
+@app.route("/contact", methods=["POST"])
+def contact():
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        name = data.get("name")
+        email = data.get("email")
+        phone = data.get("phone")
+        subject = data.get("subject")
+        message = data.get("message")
+
+        # Save submission in DB
+        new_entry = ContactSubmission(
+            name=name,
+            email=email,
+            phone=phone,
+            subject=subject,
+            message=message
+        )
+        db.session.add(new_entry)
+        db.session.commit()
+
+        # Email to ADMIN_EMAIL
+        msg = Message(
+            subject=f"New Contact Form Submission: {subject}",
+            recipients=[ADMIN_EMAIL]
+        )
+
+        # Add Reply-To header
+        msg.reply_to = email
+
+        msg.body = f"""
 New Contact Form Submission
 
-Name: {data['name']}
-Email: {data['email']}
-Phone: {data['phone']}
-Subject: {data['subject']}
+Name: {name}
+Email: {email}
+Phone: {phone}
+Subject: {subject}
 
 Message:
-{data['message']}
-"""
+{message}
+        """
 
-            msg = Message(
-                subject=f"New Contact Form Message: {data['subject']}",
-                sender=app.config["MAIL_USERNAME"],
-                recipients=[ADMIN_EMAIL],
-                body=email_body
-            )
+        mail.send(msg)
 
-            msg.reply_to = data["email"]
+        return jsonify({"message": "Message sent successfully"}), 200
 
-            mail.send(msg)
-
-            return {"success": True, "message": "Message sent!"}, 200
-
-        except Exception as e:
-            print("Error:", e)
-            return {"success": False, "message": str(e)}, 500
+    except Exception as e:
+        print("EMAIL ERROR:", e)
+        return jsonify({"error": "Failed to send message", "details": str(e)}), 500
 
 
-api.add_resource(ContactForm, "/api/contact")
-
-# Run
+# ---------------------------------------
+# MAIN
+# ---------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
